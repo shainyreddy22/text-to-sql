@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Text-to-SQL · Database Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ─── Design System ─────────────────────────────────── */
+  :root {
+    --bg:        #0b0e14;
+    --surface:   #111520;
+    --panel:     #161c2a;
+    --border:    #1e2a40;
+    --accent:    #00e5ff;
+    --accent2:   #7b5ea7;
+    --success:   #00d084;
+    --danger:    #ff4d6a;
+    --warning:   #ffb347;
+    --text:      #d8e4f0;
+    --muted:     #5a6a80;
+    --mono:      'IBM Plex Mono', monospace;
+    --display:   'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── Header ──────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-family: var(--mono);
+    font-size: 13px; font-weight: 600;
+    color: #000;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 16px; font-weight: 700; letter-spacing: .04em;
+    color: var(--text);
+  }
+  header .db-badge {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(0,229,255,.08);
+    border: 1px solid rgba(0,229,255,.2);
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  /* ─── Layout ──────────────────────────────────────────── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ─── Chat Panel ─────────────────────────────────────── */
+  .chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    scroll-behavior: smooth;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ─── Welcome State ──────────────────────────────────── */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 20px;
+    padding: 40px;
+    text-align: center;
+    animation: fadeUp .6s ease both;
+  }
+  .welcome .glyph {
+    font-size: 48px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+  .welcome p {
+    color: var(--muted);
+    font-size: 14px;
+    max-width: 380px;
+    line-height: 1.7;
+  }
+  .chips {
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    max-width: 500px;
+    margin-top: 8px;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .18s;
+    background: var(--surface);
+  }
+  .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,229,255,.05);
+  }
+
+  /* ─── Message Bubbles ────────────────────────────────── */
+  .msg {
+    display: flex;
+    flex-direction: column;
+    max-width: 84%;
+    animation: fadeUp .25s ease both;
+  }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.bot  { align-self: flex-start; align-items: flex-start; }
+
+  .bubble {
+    padding: 13px 18px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+  .msg.user .bubble {
+    background: linear-gradient(135deg, var(--accent2), #4a3870);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.bot .bubble {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    color: var(--text);
+  }
+
+  /* ─── Bot result card ────────────────────────────────── */
+  .result-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    border-top-left-radius: 4px;
+    overflow: hidden;
+    max-width: 100%;
+    width: 680px;
+    max-width: 84vw;
+  }
+
+  .card-section {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-section:last-child { border-bottom: none; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-label .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-cyan   { background: var(--accent); }
+  .dot-green  { background: var(--success); }
+  .dot-purple { background: var(--accent2); }
+  .dot-warn   { background: var(--warning); }
+  .dot-red    { background: var(--danger); }
+
+  /* ─── SQL Block ──────────────────────────────────────── */
+  .sql-block {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: #a8c4e0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .sql-block .kw  { color: var(--accent); font-weight: 600; }
+  .sql-block .cm  { color: var(--muted); font-style: italic; }
+  .sql-block .str { color: var(--success); }
+
+  /* ─── Data Table ─────────────────────────────────────── */
+  .table-wrap {
+    overflow-x: auto;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .table-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
+  .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  thead th {
+    position: sticky; top: 0;
+    background: rgba(17,21,32,.95);
+    color: var(--accent);
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }
+  tbody tr:hover            { background: rgba(0,229,255,.04); }
+  tbody td {
+    padding: 7px 14px;
+    color: var(--text);
+    border-bottom: 1px solid rgba(30,42,64,.5);
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ─── Summary ────────────────────────────────────────── */
+  .summary-text {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+  }
+
+  /* ─── Validation Pills ───────────────────────────────── */
+  .attempt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    padding: 4px 0;
+  }
+  .attempt-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .badge-ok   { background: rgba(0,208,132,.12); color: var(--success); border: 1px solid rgba(0,208,132,.3); }
+  .badge-fail { background: rgba(255,77,106,.10); color: var(--danger);  border: 1px solid rgba(255,77,106,.3); }
+
+  /* ─── Guardrail / Error ──────────────────────────────── */
+  .guardrail-msg {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--warning);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .error-msg {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--danger);
+    font-family: var(--mono);
+  }
+
+  /* ─── Row count badge ────────────────────────────────── */
+  .row-count {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--success);
+    background: rgba(0,208,132,.1);
+    border: 1px solid rgba(0,208,132,.25);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: auto;
+  }
+
+  /* ─── Thinking bubble (loading) ──────────────────────── */
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    border-bottom-left-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    align-self: flex-start;
+  }
+  .dots span {
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: .2s; }
+  .dots span:nth-child(3) { animation-delay: .4s; }
+
+  /* ─── Input bar ──────────────────────────────────────── */
+  .input-bar {
+    padding: 16px 28px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .input-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 14px;
+    transition: border-color .18s;
+  }
+  .input-row:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,229,255,.08);
+  }
+  textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: var(--text);
+    font-family: var(--display);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 22px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  textarea::placeholder { color: var(--muted); }
+  .send-btn {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: all .15s;
+  }
+  .send-btn:hover  { background: #33ecff; transform: scale(1.05); }
+  .send-btn:active { transform: scale(.97); }
+  .send-btn:disabled { background: var(--border); cursor: not-allowed; transform: none; }
+  .send-btn svg { width: 16px; height: 16px; fill: #000; }
+
+  .input-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    margin-top: 6px;
+  }
+
+  /* ─── Animations ─────────────────────────────────────── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes blink {
+    0%, 80%, 100% { opacity: .2; }
+    40%           { opacity: 1; }
+  }
+
+  /* ─── Scrollbar global ───────────────────────────────── */
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+</style>
+</head>
+<body>
+
+<!-- ─── Header ──────────────────────────────────────────── -->
+<header>
+  <div class="logo-mark">SQL</div>
+  <h1>Database Assistant</h1>
+  <span class="db-badge" id="dbBadge">loading…</span>
+</header>
+
+<!-- ─── Main ────────────────────────────────────────────── -->
+<div class="layout">
+  <div class="chat-panel">
+    <div class="messages" id="messages">
+      <!-- Welcome state -->
+      <div class="welcome" id="welcome">
+        <div class="glyph">ASK YOUR DB</div>
+        <p>Type any natural language question about your database and get instant SQL results.</p>
+        <div class="chips" id="chips">
+          <div class="chip">Top 5 customers by rentals</div>
+          <div class="chip">How many films are in each category?</div>
+          <div class="chip">List actors in 'ACADEMY DINOSAUR'</div>
+          <div class="chip">Which city has the most customers?</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input bar -->
+    <div class="input-bar">
+      <div class="input-row">
+        <textarea id="queryInput" rows="1" placeholder="Ask anything about your database…"></textarea>
+        <button class="send-btn" id="sendBtn" title="Send">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="input-hint">Enter to send · Shift+Enter for newline</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Helpers ─────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const messages  = $('messages');
+const input     = $('queryInput');
+const sendBtn   = $('sendBtn');
+const welcomeEl = $('welcome');
+
+// Auto-resize textarea
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+});
+
+// Chips → fill input
+$('chips').querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    input.value = chip.textContent;
+    input.dispatchEvent(new Event('input'));
+    input.focus();
+  });
+});
+
+// Health check — update DB badge
+fetch('/api/health')
+  .then(r => r.json())
+  .then(d => { $('dbBadge').textContent = d.db || 'connected'; })
+  .catch(() => { $('dbBadge').textContent = 'offline'; $('dbBadge').style.color = '#ff4d6a'; });
+
+// ── Send logic ───────────────────────────────────────────
+function scrollBottom() {
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function hideWelcome() {
+  if (welcomeEl) { welcomeEl.style.display = 'none'; }
+}
+
+function addUserBubble(text) {
+  hideWelcome();
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
+  messages.appendChild(div);
+  scrollBottom();
+}
+
+function addThinking() {
+  const div = document.createElement('div');
+  div.className = 'thinking';
+  div.id = 'thinking';
+  div.innerHTML = `Generating SQL <span class="dots"><span></span><span></span><span></span></span>`;
+  messages.appendChild(div);
+  scrollBottom();
+  return div;
+}
+
+function removeThinking() {
+  const t = $('thinking');
+  if (t) t.remove();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlightSql(sql) {
+  const keywords = ['SELECT','FROM','WHERE','JOIN','LEFT','RIGHT','INNER','OUTER',
+    'ON','GROUP BY','ORDER BY','HAVING','LIMIT','AS','AND','OR','NOT',
+    'IN','IS','NULL','COUNT','SUM','AVG','MAX','MIN','DISTINCT','BY'];
+  let out = escHtml(sql);
+  // comments
+  out = out.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="cm">$1</span>');
+  // string literals
+  out = out.replace(/(&apos;|&#39;|'[^']*'|"[^"]*")/g, '<span class="str">$1</span>');
+  // keywords
+  keywords.forEach(kw => {
+    const re = new RegExp(`\\b(${kw})\\b`, 'gi');
+    out = out.replace(re, '<span class="kw">$1</span>');
+  });
+  return out;
+}
+
+function buildResultCard(data) {
+  const card = document.createElement('div');
+  card.className = 'result-card';
+
+  // ── Validation attempts strip ──────────────────────────
+  const attempts = data.validation_attempts || [];
+  if (attempts.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'card-section';
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.innerHTML = `<span class="dot dot-warn"></span> Validation`;
+    sec.appendChild(label);
+
+    attempts.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'attempt-row';
+      const badge = `<span class="attempt-badge ${a.success ? 'badge-ok' : 'badge-fail'}">${a.success ? '✓ Pass' : '✗ Fail'}</span>`;
+      const reason = a.validation_error ? `<span style="color:var(--danger)">${escHtml(a.validation_error)}</span>` : '';
+      row.innerHTML = `${badge} Attempt ${a.attempt} ${reason}`;
+      sec.appendChild(row);
+    });
+    card.appendChild(sec);
+  }
+
+  // ── SQL section ────────────────────────────────────────
+  if (data.sql) {
+    const sec = document.createElement('div');
+    sec.className = 'card-section';
+    sec.innerHTML = `<div class="section-label"><span class="dot dot-cyan"></span> Generated SQL</div>
+      <div class="sql-block">${highlightSql(data.sql)}</div>`;
+    card.appendChild(sec);
+  }
+
+  // ── Guardrail ──────────────────────────────────────────
+  if (data.guardrail_message) {
+    const sec = document.createElement('div');
+    sec.className = 'card-section';
+    sec.innerHTML = `<div class="guardrail-msg">⚠️ <span>${escHtml(data.guardrail_message)}</span></div>`;
+    card.appendChild(sec);
+    return card;
+  }
+
+  // ── Error ──────────────────────────────────────────────
+  if (!data.success && data.error) {
+    const sec = document.createElement('div');
+    sec.className = 'card-section';
+    sec.innerHTML = `<div class="section-label"><span class="dot dot-red"></span> Error</div>
+      <div class="error-msg">${escHtml(data.error)}</div>`;
+    card.appendChild(sec);
+    return card;
+  }
+
+  // ── Results table ──────────────────────────────────────
+  if (data.columns && data.rows) {
+    const sec = document.createElement('div');
+    sec.className = 'card-section';
+    const rowCountBadge = `<span class="row-count">${data.row_count} row${data.row_count !== 1 ? 's' : ''}</span>`;
+    sec.innerHTML = `<div class="section-label"><span class="dot dot-green"></span> Results ${rowCountBadge}</div>`;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const tr = document.createElement('tr');
+    data.columns.forEach(col => {
+      const th = document.createElement('th');
+      th.textContent = col;
+      tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    data.rows.forEach(row => {
+      const tr2 = document.createElement('tr');
+      row.forEach(cell => {
+        const td = document.createElement('td');
+        td.textContent = cell === null ? '—' : cell;
+        tr2.appendChild(td);
+      });
+      tbody.appendChild(tr2);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    sec.appendChild(wrap);
+    card.appendChild(sec);
+  }
+
+  // ── AI Summary ─────────────────────────────────────────
+  if (data.summary) {
+    const sec = document.createElement('div');
+    sec.className = 'card-section';
+    sec.innerHTML = `<div class="section-label"><span class="dot dot-purple"></span> Summary</div>
+      <div class="summary-text">${escHtml(data.summary)}</div>`;
+    card.appendChild(sec);
+  }
+
+  return card;
+}
+
+async function sendQuery() {
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  addUserBubble(q);
+  const thinking = addThinking();
+
+  try {
+    const res = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q })
+    });
+    const data = await res.json();
+    removeThinking();
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg bot';
+
+    if (data.guardrail_message) {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = `⚠️ ${escHtml(data.guardrail_message)}`;
+      wrapper.appendChild(bubble);
+    } else {
+      const card = buildResultCard(data);
+      wrapper.appendChild(card);
+    }
+
+    messages.appendChild(wrapper);
+    scrollBottom();
+  } catch (err) {
+    removeThinking();
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg bot';
+    wrapper.innerHTML = `<div class="bubble" style="color:var(--danger)">Network error: ${escHtml(err.message)}</div>`;
+    messages.appendChild(wrapper);
+    scrollBottom();
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+// ── Keyboard ─────────────────────────────────────────────
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendQuery();
+  }
+});
+sendBtn.addEventListener('click', sendQuery);
+</script>
+</body>
+</html>
