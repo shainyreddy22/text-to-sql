@@ -3,3 +3,6 @@ google-genai
 python-dotenv
 pandas
 tabulate
+fastapi
+uvicorn[standard]
+pydantic
