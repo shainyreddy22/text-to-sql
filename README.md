@@ -82,7 +82,7 @@ Visit `http://localhost:8000` in your browser.
 #### Windows
 ```bash
 # Clone repository
-git clone https://github.com/YOUR-USERNAME/text-to-sql-main.git
+git clone https://github.com/shainyreddy22/text-to-sql.git
 cd text-to-sql-main
 
 # Create virtual environment
@@ -135,7 +135,7 @@ RETRY_DELAY_SECONDS = 30
 ### 4. Deploy
 - Click **Create Web Service**
 - Render automatically deploys on every GitHub push
-- Live URL appears on dashboard (e.g., `https://text-to-sql-main.onrender.com`)
+- Live URL appears on dashboard ("https://text-to-sql-eluv.onrender.com/")
 
 > **Note:** Free tier on Render spins down after 15 minutes of inactivity. Upgrade to Pro ($7/month) for always-on hosting.
 
